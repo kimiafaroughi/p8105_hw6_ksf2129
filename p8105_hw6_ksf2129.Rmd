@@ -4,3 +4,40 @@ author: "Kimia Faroughi"
 date: "2025-12-02"
 output: github_document
 ---
+
+Load packages
+
+```{r, message = FALSE}
+library(tidyverse)
+```
+
+## Problem 1
+
+Read in the data
+
+```{r, message = FALSE}
+homicides_df = 
+  read_csv("data/homicide-data.csv")
+```
+
+Clean data and create variables
+
+```{r, message = FALSE}
+homicides_df =
+  homicides_df |> 
+  #create city_state var, binary var whether homicide is solved, convert age to numeric
+  mutate(
+    city_state = str_c(city, state, sep = ", "),
+    solved = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest" ~ "unsolved",
+      TRUE ~ "solved"
+    ),
+    victim_age = as.numeric(victim_age)
+  ) |> 
+  filter(city_state != "Tulsa, AL", 
+         city_state != "Dallas, TX", 
+         city_state != "Phoenix, AZ", 
+         city_state != "Kansas City, MO",
+         victim_race == "White" | victim_race == "Black")
+```
