@@ -9,6 +9,10 @@ Load packages
 
 ```{r, message = FALSE}
 library(tidyverse)
+library(p8105.datasets)
+library(modelr)
+
+set.seed(1)
 ```
 
 ## Problem 1
@@ -123,3 +127,80 @@ all_cities |>
 ```
 
 This plot shows that many of the cities' estimates of the odds of a solved homicide is smaller if the victim is male compared to if the victim is female, since many of the estimated ORs are less than 1. However, some of these ORs have a corresponding 95% CI that includes the null value 1, such as Long Beach, San Bernardino, San Francisco, Sacramento, etc. This means that the apparent observation that males have a lower odds of solved homicides compared to females in such cities, using a 5% significance level and adjusting for victim age and race, can be ruled out due to chance. The same is true for all estimated ORs that are greater than 1 (Nashville, Fresno, Stockton, and Albuquerque), whose point estimates show that males have higher odds of a solved homicide compared to females, but the 95% CI includes the null value 1. Oklahoma City, Tulsa, Atlanta, and Richmond have an OR approximately equal to 1, indicating that the odds of a solved homicide is about the same for males compared to females. Finally, cities such as New York, Baton Rouge, Omaha, Cincinnati, Chicago, etc. have an estimate OR < 1 with the 95% CIs contained less than 1 as well, meaning the observation that the estimated odds of a solved homicide is smaller in males compared to females cannot be ruled out due to random chance, using a significance level of 5%, adjusting for victim age and race. 
+
+## Problem 2
+
+Load dataset 
+
+```{r}
+data("weather_df")
+```
+
+Bootstrapping
+
+```{r, warning = FALSE}
+#generate estimates
+weather_bootstrap_results = 
+  weather_df |> 
+  bootstrap(n = 5000) |> #always start small and then change as needed 
+  mutate(df = map(strap, as_tibble), 
+        fits = map(df, \(df) lm(tmax ~ tmin + prcp, data = df)), 
+        parameters = map(fits, broom::tidy), #beta1 and beta2 estimates 
+        r_squared = map(fits, broom::glance) #r^2 
+        ) |> 
+  select(.id, parameters, r_squared) |> 
+  unnest(parameters, r_squared)
+
+weather_bootstrap_estimates = 
+  weather_bootstrap_results |> 
+  select(.id, term, estimate, std.error, r.squared) |> 
+  pivot_wider(
+    values_from = estimate:std.error,
+    names_from = term
+  ) |> 
+  janitor::clean_names() |> 
+  select(-estimate_intercept, -std_error_intercept) |> 
+  mutate(
+    beta1_beta2 = estimate_tmin / estimate_prcp
+  )
+```
+
+Plot estimates
+
+```{r}
+#r squared
+weather_bootstrap_estimates |> 
+  ggplot(aes(x = r_squared)) +
+  geom_density()
+
+#beta1 / beta2
+weather_bootstrap_estimates |> 
+  ggplot(aes(x = beta1_beta2)) +
+  geom_density()
+```
+
+The plot of the r_squared estimates across the bootstrap sample shows a relatively symmetric distribution of values. The plot of the beta1/beta2 estimates, where beta1 is the estimated coefficient in the linear regression model for `tmin` and beta2 is the estimated coefficient for `prcp`, shows a much more left-skewed distribution.
+
+95% confidence interval for r squared
+
+```{r}
+#r squared
+weather_bootstrap_estimates |> 
+  summarize(
+    ci_lower = quantile(r_squared, 0.025),
+    ci_upper = quantile(r_squared, 0.975)
+  ) |> 
+  knitr::kable()
+```
+
+95% confidence interval for beta1 / beta2
+
+```{r}
+#beta1 / beta2
+weather_bootstrap_estimates |> 
+  summarize(
+    ci_lower = quantile(beta1_beta2, 0.025),
+    ci_upper = quantile(beta1_beta2, 0.975)
+  ) |> 
+  knitr::kable()
+```
